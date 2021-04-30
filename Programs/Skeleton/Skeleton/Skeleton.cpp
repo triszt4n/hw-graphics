@@ -36,31 +36,27 @@
 template<class T> struct Dnum {
 	float f;
 	T d;
-	Dnum(float f0 = 0, T d0 = T(0)) { f = f0, d = d0; }
+	Dnum(float f0 = 0, T d0 = T(0)) : f(f0), d(d0) { }
 	Dnum operator+(Dnum r) { return Dnum(f + r.f, d + r.d); }
 	Dnum operator-(Dnum r) { return Dnum(f - r.f, d - r.d); }
-	Dnum operator*(Dnum r) {
-		return Dnum(f * r.f, f * r.d + d * r.f);
-	}
-	Dnum operator/(Dnum r) {
-		return Dnum(f / r.f, (r.f * d - r.d * f) / r.f / r.f);
-	}
+	Dnum operator*(Dnum r) { return Dnum(f * r.f, f * r.d + d * r.f); }
+	Dnum operator/(Dnum r) { return Dnum(f / r.f, (r.f * d - r.d * f) / r.f / r.f); }
 };
-template<class T> Dnum<T> Sin(Dnum<T> g) { return  Dnum<T>(sinf(g.f), cosf(g.f)*g.d); }
-template<class T> Dnum<T> Cos(Dnum<T>  g) { return  Dnum<T>(cosf(g.f), -sinf(g.f)*g.d); }
-template<class T> Dnum<T> Pow(Dnum<T> g, float n) { return  Dnum<T>(powf(g.f, n), n * powf(g.f, n - 1) * g.d); }
+template<class T> Dnum<T> Sin(Dnum<T> g) { return Dnum<T>(sinf(g.f), cosf(g.f) * g.d); }
+template<class T> Dnum<T> Cos(Dnum<T> g) { return Dnum<T>(cosf(g.f), -sinf(g.f) * g.d); }
+template<class T> Dnum<T> Pow(Dnum<T> g, float n) { return Dnum<T>(powf(g.f, n), n * powf(g.f, n - 1) * g.d); }
 typedef Dnum<vec2> Dnum2;
 
 const int TESSELATION_LEVEL = 100;
 const vec3 GRAVITY_VEC = { 0, 0, -9.81f };
 const float R_NULL = 0.005f;
-const float AMPLIFIER = 15.0f;
-const float UPPER_BOUND = 10.0f;
+const float AMPLIFIER = 20.0f;
+const float UPPER_BOUND = 15.0f;
 const float FOV_DEGREES = 45.0f;
 const float SPHERE_RADIUS = 0.5f;
 const float STARTING_MASS = 0.05f;
 const float SPHERE_MASS = 1.0f;
-const float MAX_DEPTH = -12.0f;
+const float MAX_DEPTH = -8.0f;
 
 struct Weight {
 	Dnum2 X, Y;
@@ -107,7 +103,8 @@ public:
 		fov = FOV_DEGREES * (float)M_PI / 180.0f;
 		fp = 1;
 		bp = UPPER_BOUND * 10;
-	} 
+	}
+
 	mat4 V() {
 		vec3 w = normalize(wEye - wLookat);
 		vec3 u = normalize(cross(wVup, w));
@@ -345,9 +342,13 @@ public:
 class Sphere : public ParamSurface {
 public:
 	Sphere() { create(); }
+
 	void eval(Dnum2& U, Dnum2& V, Dnum2& X, Dnum2& Y, Dnum2& Z) {
-		U = U * 2.0f * (float)M_PI, V = V * (float)M_PI;
-		X = Cos(U) * Sin(V); Y = Sin(U) * Sin(V); Z = Cos(V);
+		U = U * 2.0f * M_PI;
+		V = V * M_PI;
+		X = Cos(U) * Sin(V); 
+		Y = Sin(U) * Sin(V); 
+		Z = Cos(V);
 	}
 };
 
@@ -411,12 +412,12 @@ struct SphereObject : Object {
 	SphereObject(Material* _material) : Object(_material, sphere), E(0), v({ 0, 0, 0 }), normal({ 0, 0, 1 }) { }
 
 	float CalcNormal() {
-		// get normal on sheet
 		vec3 p = (translation / UPPER_BOUND + vec3(1, 1, 1)) / 2.0f;
 		Dnum2 X = { p.x, vec2(1, 0) };
 		Dnum2 Y = { p.y, vec2(0, 1) };
 		Dnum2 Z = h(X, Y);
-		normal = normalize({ -Z.d.x, -Z.d.y, 1 });
+		vec3 drdU(X.d.x, Y.d.x, Z.d.x), drdV(X.d.y, Y.d.y, Z.d.y);
+		normal = normalize(cross(drdU, drdV));
 		return Z.f;
 	}
 
@@ -432,7 +433,6 @@ struct SphereObject : Object {
 	void Animate(float tstart, float tend) {
 		if (translation.z <= MAX_DEPTH)
 			return;
-
 		float dt = tend - tstart;
 
 		// Euler's
@@ -444,19 +444,17 @@ struct SphereObject : Object {
 		// flat torus topology
 		if (translation.x >= UPPER_BOUND)
 			translation.x = translation.x - UPPER_BOUND * 2;
-
 		if (translation.y >= UPPER_BOUND)
 			translation.y = translation.y - UPPER_BOUND * 2;
 
-		// bring back to sheet	
+		// bring back to sheet
 		float z = CalcNormal();
-		translation = vec3(translation.x, translation.y, z); //+ normal * SPHERE_MASS;
+		translation = { translation.x, translation.y, z + SPHERE_RADIUS };
 
 		// energy correction
 		float expectedVelocity = sqrtf(2 * (E - length(GRAVITY_VEC) * fabsf(MAX_DEPTH - translation.z)));
 		float rate = expectedVelocity / length(v);
 		v = v * rate;
-		printf("E: %g\tv: %g (%g %g %g)\ta: %g (%g %g %g)\r", CalcEnergy(), length(v), v.x, v.y, v.z, length(a), a.x, a.y, a.z);
 	}
 };
 
@@ -510,13 +508,12 @@ public:
 	void Render(SphereObject* sphereObject) {
 		RenderState state;
 		Camera camera;
-		camera.wEye = sphereObject->translation + vec3(0, 0, SPHERE_RADIUS);
+
+		camera.wEye = sphereObject->translation + vec3(0, 0, 2 * SPHERE_RADIUS);
 		camera.wLookat = sphereObject->v == vec3(0, 0, 0)?
 			vec3(10, 10, SPHERE_RADIUS) : 
 			sphereObject->translation + normalize(sphereObject->v) + vec3(0, 0, SPHERE_RADIUS);
 		camera.wVup = sphereObject->normal;
-
-		// printf("wEye: (%g %g %g)\twLookat: (%g %g %g)\twVup: (%g %g %g)\r", camera.wEye.x, camera.wEye.y, camera.wEye.z, camera.wLookat.x, camera.wLookat.y, camera.wLookat.z, camera.wVup.x, camera.wVup.y, camera.wVup.z);
 
 		state.wEye = camera.wEye;
 		state.V = camera.V();
