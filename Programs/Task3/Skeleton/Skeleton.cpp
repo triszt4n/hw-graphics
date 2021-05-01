@@ -455,6 +455,7 @@ struct SphereObject : Object {
 		float expectedVelocity = sqrtf(2 * (E - length(GRAVITY_VEC) * fabsf(MAX_DEPTH - translation.z)));
 		float rate = expectedVelocity / length(v);
 		v = v * rate;
+		printf("E: %g\tv: %g (%g %g %g)\ta: %g (%g %g %g)\r", CalcEnergy(), length(v), v.x, v.y, v.z, length(a), a.x, a.y, a.z);
 	}
 };
 
