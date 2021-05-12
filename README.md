@@ -38,6 +38,6 @@ A gumilepedőt két pontfényforrás világítja meg, amelyek egymás kezdeti po
 | ------------- | ---: |
 | Gráfrajzoló   |  2/2 |
 | Orbifold      |  3/3 |
-| Gumilepedő    |  ?/4 |
+| Gumilepedő    |  4/4 |
 
 _Only source files are included in git repository, see [university website](http://cg.iit.bme.hu/portal/szamitogepes-grafika) for frameworks._
